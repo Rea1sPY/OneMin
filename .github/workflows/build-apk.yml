@@ -12,28 +12,50 @@ env:
 jobs:
   export-android:
     runs-on: ubuntu-22.04
+
     container:
       image: barichello/godot-ci:4.2.2
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout project
+        uses: actions/checkout@v4
 
       - name: Setup Godot templates and Android settings
         run: |
-          if [ "$HOME" != "/root" ]; then
-            mkdir -v -p ~/.local/share/godot/export_templates/ ~/.config/
-            mv /root/.config/godot ~/.config/godot
-            mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p "$HOME/.config/godot"
+          mkdir -p "$HOME/.local/share/godot/export_templates"
+
+          if [ -d "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" ] && [ "$HOME" != "/root" ]; then
+            cp -rn /root/.config/godot/. "$HOME/.config/godot/" 2>/dev/null || true
+            cp -rn "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable/." \
+              "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/" 2>/dev/null || true
           fi
 
+          echo "HOME=$HOME"
+          echo "Java:"
+          java -version
+          echo "Android SDK locations:"
+          ls -ld /root/.android /root/android-sdk /opt/android-sdk "$ANDROID_HOME" "$ANDROID_SDK_ROOT" 2>/dev/null || true
+
       - name: Import project resources
-        run: timeout 240 godot --headless --editor --quit || true
+        run: |
+          godot --headless --editor --path . --quit
 
       - name: Export debug APK
         run: |
-          mkdir -v -p build/android
-          godot --headless --verbose --export-debug "Android" "$(pwd)/build/android/${EXPORT_NAME}.apk"
+          mkdir -p build/android
+          godot --headless --verbose \
+            --path . \
+            --export-debug "Android" \
+            "$(pwd)/build/android/${EXPORT_NAME}.apk"
 
-      - uses: actions/upload-artifact@v4
+      - name: Verify APK
+        run: |
+          test -s "build/android/${EXPORT_NAME}.apk"
+          ls -lh "build/android/${EXPORT_NAME}.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: one-minute-to-die-apk
           path: build/android/OneMinuteToDie.apk
