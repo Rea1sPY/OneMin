@@ -20,22 +20,39 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Setup Godot templates and Android settings
+      - name: Configure Java, Android SDK and Godot
+        shell: bash
         run: |
+          set -eu
+
+          echo "Checking Java..."
+          java -version
+
+          echo "Checking Android SDK..."
+          test -d /usr/lib/android-sdk
+          test -d /usr/lib/jvm/java-17-openjdk-amd64
+          test -f /root/debug.keystore
+
           mkdir -p "$HOME/.config/godot"
           mkdir -p "$HOME/.local/share/godot/export_templates"
 
-          if [ -d "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" ] && [ "$HOME" != "/root" ]; then
-            cp -rn /root/.config/godot/. "$HOME/.config/godot/" 2>/dev/null || true
-            cp -rn "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable/." \
-              "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/" 2>/dev/null || true
+          if [ "$HOME" != "/root" ]; then
+            cp -a /root/.local/share/godot/export_templates/4.2.2.stable \
+              "$HOME/.local/share/godot/export_templates/" 
           fi
 
-          echo "HOME=$HOME"
-          echo "Java:"
-          java -version
-          echo "Android SDK locations:"
-          ls -ld /root/.android /root/android-sdk /opt/android-sdk "$ANDROID_HOME" "$ANDROID_SDK_ROOT" 2>/dev/null || true
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<'EOF'
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"
+          export/android/android_sdk_path = "/usr/lib/android-sdk"
+          export/android/debug_keystore = "/root/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+          echo "Android export settings configured."
 
       - name: Import project resources
         run: |
@@ -44,6 +61,7 @@ jobs:
       - name: Export debug APK
         run: |
           mkdir -p build/android
+
           godot --headless --verbose \
             --path . \
             --export-debug "Android" \
